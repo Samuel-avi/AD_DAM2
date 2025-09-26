@@ -1,8 +1,6 @@
 package reto1;
 
-import java.io.Serializable;
-
-public class Coche implements Serializable {
+public class Coche {
 
 	String marca;
 	String modelo;
@@ -16,10 +14,11 @@ public class Coche implements Serializable {
 		this.color = color;
 		this.ruedas = ruedas;
 	}
-	
-	
-	
-	
-	
+
+	@Override
+	public String toString() {
+		return marca + "," + modelo + "," + color + "," + ruedas;
+	}
 	
 }
+
