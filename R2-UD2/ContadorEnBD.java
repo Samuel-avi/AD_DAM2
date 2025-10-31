@@ -1,5 +1,3 @@
-package Pruebajar;
-
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -12,67 +10,71 @@ import java.util.Properties;
 
 public class ContadorEnBD {
 
-	public static void main(String[] args) {
-		
+    public static void main(String[] args) {
+
         Properties p = new Properties();
-        
-		try (FileInputStream input = new FileInputStream("config.ini");) {
-			
-			p.load(input);
-			
-		} catch (FileNotFoundException e) {
-			
-			e.printStackTrace();
-			
-		}catch (IOException e) {
-			
-			e.printStackTrace();
-			
-		}
-        
-		final String TABLA = "CREATE TABLE IF NOT EXISTS contadores(nombre varchar(10) primary key, cuenta int);";
-		final String sqlConsulta = "SELECT cuenta FROM contadores WHERE nombre=?;";
-		final String sqlActualización = "UPDATE contadores SET cuenta=? WHERE nombre=?;";
-		final String INSERTAR = "INSERT OR REPLACE INTO contadores VALUES ('contador1', 0);";
-		final String claveContador = "contador1";
-		final String RUTA = p.getProperty("conexion");
 
-		try {
-			Connection connection = DriverManager.getConnection("jdbc:sqlite:" + RUTA);
-			
-			PreparedStatement crear = connection.prepareStatement(TABLA);
-			crear.execute();
-			
-			PreparedStatement insertar = connection.prepareStatement(INSERTAR);
-			insertar.execute();
-			
-			PreparedStatement consulta = connection.prepareStatement(sqlConsulta);
-			PreparedStatement actualización = connection.prepareStatement(sqlActualización);
-			int cuenta = 0;
-			int contador1 = 0;
+        try (FileInputStream input = new FileInputStream("config.ini")) {
+            p.load(input);
+        } catch (FileNotFoundException e) {
+            System.err.println("No se encontró el archivo config.ini");
+            return;
+        } catch (IOException e) {
+            System.err.println("Error al leer config.ini");
+            e.printStackTrace();
+            return;
+        }
 
-			consulta.setString(1, claveContador);
-			actualización.setString(2, claveContador);
-			for (int i = 0; i < 1000; i++) {
-				ResultSet res = consulta.executeQuery();
-				if (res.next()) {
-					cuenta = res.getInt(1) + 1;
-					actualización.setInt(1, cuenta);
-					actualización.executeUpdate();
-				}
-				// else break;
-				else
-					System.out.println("Error");
-				// if (i%10==0) System.out.println(i/10 + "%");
-			}
-			System.out.println("Valor final: " + cuenta);
+        final String TABLA = "CREATE TABLE IF NOT EXISTS contadores(nombre VARCHAR(10) PRIMARY KEY, cuenta INT);";
+        final String SQL_CONSULTA = "SELECT cuenta FROM contadores WHERE nombre=?;";
+        final String SQL_ACTUALIZACION = "UPDATE contadores SET cuenta=? WHERE nombre=?;";
+        final String SQL_INSERTAR = "INSERT OR IGNORE INTO contadores VALUES ('contador1', 0);";
+        final String CLAVE_CONTADOR = "contador1";
+        final String RUTA = p.getProperty("conexion");
 
-		} // try
-		catch (SQLException e) {
-			System.out.println(e.getMessage());
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	} // main
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + RUTA)) {
 
-} // class
+            connection.setAutoCommit(false);
+
+            try (PreparedStatement crear = connection.prepareStatement(TABLA);
+                 PreparedStatement insertar = connection.prepareStatement(SQL_INSERTAR)) {
+
+                crear.execute();
+                insertar.execute();
+            }
+
+            try (PreparedStatement consulta = connection.prepareStatement(SQL_CONSULTA);
+                 PreparedStatement actualizacion = connection.prepareStatement(SQL_ACTUALIZACION)) {
+
+                int cuenta = 0;
+
+                consulta.setString(1, CLAVE_CONTADOR);
+                actualizacion.setString(2, CLAVE_CONTADOR);
+
+                for (int i = 0; i < 1000; i++) {
+                    try (ResultSet res = consulta.executeQuery()) {
+                        if (res.next()) {
+                            cuenta = res.getInt("cuenta") + 1;
+                            actualizacion.setInt(1, cuenta);
+                            actualizacion.executeUpdate();
+                        } else {
+                            System.out.println("Error: no se encontró el contador");
+                        }
+                    }
+                }
+                connection.commit();
+
+                System.out.println("Valor final del contador: " + cuenta);
+            } catch (SQLException e) {
+
+                System.err.println("Error en la transacción, revirtiendo cambios...");
+                connection.rollback();
+                e.printStackTrace();
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al conectar o ejecutar en la base de datos:");
+            e.printStackTrace();
+        }
+    }
+}
